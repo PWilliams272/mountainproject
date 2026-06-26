@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+src/*.egg-info/
+*.egg-info/
+.DS_Store
+mountainproject-auth.json
+data/

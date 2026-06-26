@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mountainproject-scraper"
+version = "0.1.0"
+description = "Scrape Mountain Project areas, routes, comments, and photos into structured files"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "beautifulsoup4>=4.12.3",
+  "duckdb>=1.4.0",
+  "folium>=0.20.0",
+  "requests>=2.32.3",
+  "rich>=13.9.4",
+  "typer>=0.16.0",
+]
+
+[project.scripts]
+mountainproject-scraper = "mountainproject_scraper.cli:app"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.2",
+  "ruff>=0.5.7",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
