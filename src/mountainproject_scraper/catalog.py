@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 from .models import RouteStatsBundle, area_from_dict, route_from_dict
 
@@ -12,6 +13,18 @@ class StoredObjectRef:
     export_name: str
     object_id: str
     path: Path
+
+
+@dataclass(frozen=True)
+class StoredManifestRef:
+    export_name: str
+    path: Path
+    manifest: dict[str, object]
+
+
+def _canonical_page_url(url: str) -> str:
+    parts = urlsplit(url)
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
 
 
 class ExportCatalog:
@@ -28,6 +41,7 @@ class ExportCatalog:
         self._area_refs: dict[str, StoredObjectRef] = {}
         self._route_refs: dict[str, StoredObjectRef] = {}
         self._route_stats_refs: dict[str, StoredObjectRef] = {}
+        self._completed_crawl_refs: dict[str, StoredManifestRef] = {}
         self._scanned = False
 
     def load_area_by_url(self, area_url: str):
@@ -56,6 +70,31 @@ class ExportCatalog:
             return None
         payload = json.loads(ref.path.read_text(encoding="utf-8"))
         return route_stats_bundle_from_dict(payload)
+
+    def find_completed_crawl(
+        self,
+        start_url: str,
+        *,
+        require_full_depth: bool | None = None,
+    ) -> StoredManifestRef | None:
+        self._ensure_scanned()
+        ref = self._completed_crawl_refs.get(_canonical_page_url(start_url))
+        if ref is None:
+            return None
+        if require_full_depth is not None and bool(ref.manifest.get("full_depth")) != require_full_depth:
+            return None
+        return ref
+
+    def list_completed_crawls(
+        self,
+        *,
+        require_full_depth: bool | None = None,
+    ) -> list[StoredManifestRef]:
+        self._ensure_scanned()
+        refs = list(self._completed_crawl_refs.values())
+        if require_full_depth is not None:
+            refs = [ref for ref in refs if bool(ref.manifest.get("full_depth")) == require_full_depth]
+        return sorted(refs, key=lambda ref: str(ref.manifest.get("start_url") or ""))
 
     def _ensure_scanned(self) -> None:
         if self._scanned:
@@ -87,6 +126,10 @@ class ExportCatalog:
 
     def _index_export(self, export_dir: Path) -> None:
         export_name = export_dir.name
+        manifest_path = export_dir / "manifest.json"
+
+        if manifest_path.exists():
+            self._index_manifest(export_name, manifest_path)
 
         areas_dir = export_dir / "areas"
         if areas_dir.exists():
@@ -112,6 +155,24 @@ class ExportCatalog:
                 route_id = path.stem
                 if route_id not in self._route_stats_refs:
                     self._route_stats_refs[route_id] = StoredObjectRef(export_name, route_id, path)
+
+    def _index_manifest(self, export_name: str, manifest_path: Path) -> None:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        start_url = str(manifest.get("start_url") or "")
+        finished_at = str(manifest.get("finished_at") or "")
+        if not start_url or not finished_at:
+            return
+
+        start_url = _canonical_page_url(start_url)
+        candidate = StoredManifestRef(export_name=export_name, path=manifest_path, manifest=manifest)
+        existing = self._completed_crawl_refs.get(start_url)
+        if existing is None:
+            self._completed_crawl_refs[start_url] = candidate
+            return
+
+        existing_finished_at = str(existing.manifest.get("finished_at") or "")
+        if finished_at >= existing_finished_at:
+            self._completed_crawl_refs[start_url] = candidate
 
 
 def route_stats_bundle_from_dict(payload: dict[str, object]) -> RouteStatsBundle:
