@@ -34,15 +34,43 @@ By default, exports now live under `data/exports/<area_slug>`, and sibling expor
 
 ## Package layout
 
-The codebase now has a lightweight split between scraping, storage, and domain models:
+The codebase now has a split between scraping, storage, and domain models:
 
 - `mountainproject_scraper.scrape`: scraping CLI and crawl/fetch logic
 - `mountainproject_scraper.storage`: export catalog, structured storage, and data access helpers
 - `mountainproject_scraper.domain`: shared record models
 
-The original top-level modules remain in place for compatibility, so existing imports continue to work while newer code can use the grouped subpackages.
+Scraper code is now canonical under `mountainproject_scraper.scrape`. The old top-level scraper modules have been removed, so programmatic scraper imports should use `mountainproject_scraper.scrape.*` paths.
 
 ## Usage
+
+List state roots that have already been pulled:
+
+```bash
+mountainproject-scraper list-pulled-states
+```
+
+List state roots that have not been pulled yet:
+
+```bash
+mountainproject-scraper list-unpulled-states
+```
+
+Preview the remaining state queue without scraping:
+
+```bash
+mountainproject-scraper pull-unpulled-states --dry-run
+```
+
+Pull a state by name instead of passing the full Mountain Project area URL:
+
+```bash
+mountainproject-scraper pull-state colorado
+```
+
+By default, `pull-state` skips states that already have a completed full-depth manifest. Use `--no-skip-if-pulled` if you want to force a rerun.
+
+By default, `scrape-area` and the state-based commands now use full-depth crawling, fetch route stats, and resume the output directory instead of truncating it.
 
 Scrape a single area page and all routes directly listed on it:
 
@@ -145,6 +173,8 @@ mountainproject-scraper scrape-area \
   --auth-credentials-file /absolute/path/to/mountainproject-auth.json
 ```
 
+If `./mountainproject-auth.json` exists in the project root, the scraper now uses it automatically when you do not pass explicit credentials or cookies.
+
 Download resolved image files:
 
 ```bash
@@ -225,15 +255,16 @@ data/
 - Use `--http-cache-mode persistent` only when you explicitly want durable response caches on disk. Use `disabled` to bypass response caching entirely.
 - Comments can be partial when unauthenticated. The exported record marks `comments_truncated` when the site exposes a `Show N More Comments` control instead of returning the full thread.
 - Authenticated login is now supported with `MOUNTAINPROJECT_EMAIL` and `MOUNTAINPROJECT_PASSWORD`, or `--auth-credentials-file`. Since authenticated pulls are the durable path forward, keep canonical exports under `data/exports/` and prefer login-backed runs when building that catalog.
+- If no explicit auth flags or env vars are provided, the CLI will automatically use `./mountainproject-auth.json` when that file exists.
 - `--max-depth` is a manual area-to-area hop limit from the starting area. Use `--full-depth` if you want the crawler to stop only when it runs out of in-scope descendant areas.
-- Route stats are fetched separately and are off by default because they add multiple requests per route.
+- Route stats are fetched separately and are now on by default because they are part of the normal full export flow for this project.
 - Route pages can be scraped with bounded threading via `--route-workers`, and route stats fetching supports bounded threading via `--route-stats-workers`. Both default to 8 workers.
 - All uncached requests, including threaded route and route-stats fetches, now share one global rate limiter controlled by `--delay-seconds`.
 - If any request receives HTTP 429, the scraper now pauses all threads for 90 seconds from the latest 429 response before issuing the next request. A second 429 before any successful response completes aborts the run so you can resume later with a higher `--delay-seconds`.
 - Transient transport failures such as connection drops and request timeouts are retried automatically with exponential backoff. Transient server-side failures such as HTTP `500`, `502`, `503`, and `504` are also retried. If the network stays down or the server keeps failing, rerun the same command with `--resume-output` after connectivity returns.
 - Route pages or route-stats endpoints that still fail after retries, whether from persistent `5xx` responses or transport-level failures such as DNS/connection errors, are skipped and recorded in `skipped_requests.jsonl` inside the export directory so they can be reviewed or backfilled later.
 - `--reuse-catalog` now reuses saved areas, routes, and route stats from sibling export directories under the catalog root, so overlapping pulls can skip previously saved records without sharing one giant output directory.
-- `--resume-output` still matters for continuing an interrupted run in the same output directory.
+- `--resume-output` is now the default. Use `--fresh-output` if you explicitly want to truncate and rebuild an existing output directory.
 - After killing a run, continue it by rerunning the same command with `--resume-output` against the same output directory. Resume uses the saved JSON and JSONL exports on disk; it does not need the in-memory `ephemeral` cache to survive.
 - Local structured storage is materialized automatically into Parquet and DuckDB from the JSONL tables. Treat those structured tables as the durable local development store.
 - Route and area records include photo-page links even when direct image URLs are not resolved.
