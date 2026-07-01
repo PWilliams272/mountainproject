@@ -37,7 +37,8 @@ By default, exports now live under `data/exports/<area_slug>`, and sibling expor
 The codebase now has a split between scraping, storage, and domain models:
 
 - `mountainproject.scraper`: scraping CLI and crawl/fetch logic
-- `mountainproject.storage`: export catalog, structured storage, and data access helpers
+- `mountainproject.storage`: export catalog and structured storage
+- `mountainproject.reader`: export loading and query helpers
 - `mountainproject.domain`: shared record models
 
 Scraper code is now canonical under `mountainproject.scraper`. Shared record models are canonical under `mountainproject.domain.models`.
@@ -69,6 +70,26 @@ mountainproject pull-state colorado
 ```
 
 By default, `pull-state` skips states that already have a completed full-depth manifest. Use `--no-skip-if-pulled` if you want to force a rerun.
+
+List the continent roots under International:
+
+```bash
+mountainproject list-continent-area-urls
+```
+
+Preview all remaining continent pulls under International without scraping:
+
+```bash
+mountainproject pull-international --dry-run
+```
+
+Pull a single continent by name:
+
+```bash
+mountainproject pull-continent europe
+```
+
+`pull-international` behaves like the state queue command for continents: by default it skips any continent that already has a completed full-depth manifest, and `--no-skip-if-pulled` forces a rerun of every continent.
 
 By default, `scrape-area` and the state-based commands now use full-depth crawling, fetch route stats, and resume the output directory instead of truncating it.
 

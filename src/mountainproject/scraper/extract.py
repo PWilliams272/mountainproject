@@ -63,6 +63,16 @@ US_STATE_NAMES = {
     "Wisconsin",
     "Wyoming",
 }
+CONTINENT_NAMES = {
+    "Africa",
+    "Antarctica",
+    "Asia",
+    "Australia",
+    "Europe",
+    "North America",
+    "Oceania",
+    "South America",
+}
 
 
 def clean_text(value: str | None) -> str:
@@ -168,13 +178,50 @@ def parse_route_guide_state_area_urls(
     *,
     page_url: str = "https://www.mountainproject.com/route-guide",
 ) -> list[tuple[str, str]]:
+    return parse_named_area_urls(html, page_url=page_url, allowed_names=US_STATE_NAMES)
+
+
+def parse_route_guide_international_area_url(
+    html: str,
+    *,
+    page_url: str = "https://www.mountainproject.com/route-guide",
+) -> str | None:
+    international_area_urls = parse_named_area_urls(
+        html,
+        page_url=page_url,
+        allowed_names={"International"},
+    )
+    return international_area_urls[0][1] if international_area_urls else None
+
+
+def parse_international_continent_area_urls(
+    html: str,
+    *,
+    page_url: str = "https://www.mountainproject.com/area/105907743/international",
+) -> list[tuple[str, str]]:
+    return parse_named_area_urls(
+        html,
+        page_url=page_url,
+        allowed_names=CONTINENT_NAMES,
+        section_heading="Areas in International",
+    )
+
+
+def parse_named_area_urls(
+    html: str,
+    *,
+    page_url: str,
+    allowed_names: set[str] | None = None,
+    section_heading: str | None = None,
+) -> list[tuple[str, str]]:
     soup = BeautifulSoup(html, "html.parser")
-    state_area_urls: list[tuple[str, str]] = []
+    area_urls: list[tuple[str, str]] = []
     seen_urls: set[str] = set()
 
-    for link in soup.select('a[href*="/area/"]'):
-        state_name = clean_text(link.get_text(" ", strip=True))
-        if state_name not in US_STATE_NAMES:
+    candidate_links = _select_named_area_links(soup, section_heading=section_heading)
+    for link in candidate_links:
+        area_name = clean_text(link.get_text(" ", strip=True))
+        if allowed_names is not None and area_name not in allowed_names:
             continue
         href = absolute_url(page_url, link.get("href"))
         if not href:
@@ -185,9 +232,24 @@ def parse_route_guide_state_area_urls(
         if href in seen_urls:
             continue
         seen_urls.add(href)
-        state_area_urls.append((state_name, href))
+        area_urls.append((area_name, href))
 
-    return sorted(state_area_urls, key=lambda item: item[0])
+    return sorted(area_urls, key=lambda item: item[0])
+
+
+def _select_named_area_links(soup: BeautifulSoup, *, section_heading: str | None) -> list[Tag]:
+    if section_heading is None:
+        return list(soup.select('a[href*="/area/"]'))
+
+    for heading in soup.find_all(HEADING_NAMES):
+        if clean_text(heading.get_text(" ", strip=True)) != section_heading:
+            continue
+        section_root = heading.find_parent(class_="mp-sidebar") or heading.parent
+        if isinstance(section_root, Tag):
+            return list(section_root.select('a[href*="/area/"]'))
+        break
+
+    return []
 
 
 def parse_child_area_urls(

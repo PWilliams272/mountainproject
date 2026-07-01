@@ -15,7 +15,11 @@ from ..storage.exporters import JsonExporter
 from ..storage.structured_store import StructuredLocalStore
 from .client import MountainProjectClient
 from .crawler import CrawlOptions, MountainProjectCrawler
-from .extract import parse_route_guide_state_area_urls
+from .extract import (
+    parse_international_continent_area_urls,
+    parse_route_guide_international_area_url,
+    parse_route_guide_state_area_urls,
+)
 from .hydrate import MissingRouteStatsHydrator
 from .progress import create_progress_reporter, format_elapsed
 
@@ -23,10 +27,16 @@ app = typer.Typer(no_args_is_help=True, help="Scrape Mountain Project areas into
 CLI_COMMAND_NAMES = {
     "scrape-area",
     "list-state-area-urls",
+    "list-continent-area-urls",
     "list-pulled-states",
+    "list-pulled-continents",
     "list-unpulled-states",
+    "list-unpulled-continents",
     "pull-state",
+    "pull-continent",
+    "pull-international",
     "pull-unpulled-states",
+    "pull-unpulled-continents",
 }
 ROUTE_GUIDE_URL = "https://www.mountainproject.com/route-guide"
 DEFAULT_AUTH_CREDENTIALS_FILE = Path("mountainproject-auth.json")
@@ -296,6 +306,54 @@ def list_unpulled_states(
     _emit_state_rows([row for row in rows if not row["completed_full_depth"]], output_format=output_format)
 
 
+@app.command("list-continent-area-urls")
+def list_continent_area_urls(
+    catalog_root: Path = typer.Option(Path("data/exports"), help="Top-level directory that holds export directories and manifests."),
+    only_missing: bool = typer.Option(False, "--only-missing", help="Show only continents that do not already have a completed full-depth crawl manifest."),
+    output_format: Literal["text", "json"] = typer.Option("text", "--format", help="Output format."),
+    http_cache_mode: Literal["persistent", "ephemeral", "disabled"] = typer.Option("ephemeral", "--http-cache-mode", help="How to cache the route-guide page response for this command."),
+    user_agent: str = typer.Option("Mozilla/5.0", help="User-Agent header to send with requests."),
+) -> None:
+    rows = _load_continent_rows(
+        catalog_root=catalog_root,
+        http_cache_mode=http_cache_mode,
+        user_agent=user_agent,
+    )
+    if only_missing:
+        rows = [row for row in rows if not row["completed_full_depth"]]
+    _emit_continent_rows(rows, output_format=output_format)
+
+
+@app.command("list-pulled-continents")
+def list_pulled_continents(
+    catalog_root: Path = typer.Option(Path("data/exports"), help="Top-level directory that holds export directories and manifests."),
+    output_format: Literal["text", "json"] = typer.Option("text", "--format", help="Output format."),
+    http_cache_mode: Literal["persistent", "ephemeral", "disabled"] = typer.Option("ephemeral", "--http-cache-mode", help="How to cache the route-guide page response for this command."),
+    user_agent: str = typer.Option("Mozilla/5.0", help="User-Agent header to send with requests."),
+) -> None:
+    rows = _load_continent_rows(
+        catalog_root=catalog_root,
+        http_cache_mode=http_cache_mode,
+        user_agent=user_agent,
+    )
+    _emit_continent_rows([row for row in rows if row["completed_full_depth"]], output_format=output_format)
+
+
+@app.command("list-unpulled-continents")
+def list_unpulled_continents(
+    catalog_root: Path = typer.Option(Path("data/exports"), help="Top-level directory that holds export directories and manifests."),
+    output_format: Literal["text", "json"] = typer.Option("text", "--format", help="Output format."),
+    http_cache_mode: Literal["persistent", "ephemeral", "disabled"] = typer.Option("ephemeral", "--http-cache-mode", help="How to cache the route-guide page response for this command."),
+    user_agent: str = typer.Option("Mozilla/5.0", help="User-Agent header to send with requests."),
+) -> None:
+    rows = _load_continent_rows(
+        catalog_root=catalog_root,
+        http_cache_mode=http_cache_mode,
+        user_agent=user_agent,
+    )
+    _emit_continent_rows([row for row in rows if not row["completed_full_depth"]], output_format=output_format)
+
+
 @app.command("pull-state")
 def pull_state(
     state: str = typer.Argument(..., help="State name, for example 'Colorado' or 'west-virginia'."),
@@ -338,6 +396,74 @@ def pull_state(
         return
     scrape_area(
         start_url=str(state_row["area_url"]),
+        output_dir=None,
+        catalog_root=catalog_root,
+        max_depth=max_depth,
+        full_depth=full_depth,
+        delay_seconds=delay_seconds,
+        http_cache_mode=http_cache_mode,
+        fetch_comments=fetch_comments,
+        fetch_route_stats=fetch_route_stats,
+        hydrate_missing_route_stats_only=hydrate_missing_route_stats_only,
+        route_workers=route_workers,
+        route_stats_workers=route_stats_workers,
+        resume_output=resume_output,
+        reuse_catalog=reuse_catalog,
+        progress=progress,
+        materialize_structured_storage=materialize_structured_storage,
+        resolve_photo_pages=resolve_photo_pages,
+        download_images=download_images,
+        save_html=save_html,
+        auth_credentials_file=auth_credentials_file,
+        login_email=login_email,
+        login_password=login_password,
+        cookie=cookie,
+        user_agent=user_agent,
+    )
+
+
+@app.command("pull-continent")
+def pull_continent(
+    continent: str = typer.Argument(..., help="Continent name, for example 'Europe' or 'north-america'."),
+    catalog_root: Path = typer.Option(Path("data/exports"), help="Top-level directory that holds all reusable export directories."),
+    skip_if_pulled: bool = typer.Option(True, "--skip-if-pulled/--no-skip-if-pulled", help="Return immediately if the continent already has a completed full-depth crawl manifest."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be pulled and exit without scraping."),
+    max_depth: int = typer.Option(0, min=0, help="How many child-area levels to recurse into when --no-full-depth is used."),
+    full_depth: bool = typer.Option(True, "--full-depth/--no-full-depth", help="Recurse through all in-scope descendant areas until no child areas remain."),
+    delay_seconds: float = typer.Option(0.1, min=0.0, help="Global minimum delay between uncached requests across all worker threads."),
+    http_cache_mode: Literal["persistent", "ephemeral", "disabled"] = typer.Option("ephemeral", "--http-cache-mode", help="How to cache full HTTP response bodies during a scrape."),
+    fetch_comments: bool = typer.Option(True, "--fetch-comments/--no-fetch-comments", help="Fetch route and area comments via the comments fragment endpoint."),
+    fetch_route_stats: bool = typer.Option(True, "--fetch-route-stats/--no-fetch-route-stats", help="Fetch route stars, suggested ratings, to-do users, and ticks via the route stats API."),
+    hydrate_missing_route_stats_only: bool = typer.Option(False, "--hydrate-missing-route-stats-only", help="Fetch route stats only for routes already present in routes.jsonl that do not yet have route stats exported."),
+    route_workers: int = typer.Option(8, min=1, help="Worker threads to use when scraping route pages within an area."),
+    route_stats_workers: int = typer.Option(8, min=1, help="Worker threads to use when fetching route stats endpoints."),
+    resume_output: bool = typer.Option(True, "--resume-output/--fresh-output", help="Preserve existing JSONL exports and append only missing records instead of truncating the output directory."),
+    reuse_catalog: bool = typer.Option(True, "--reuse-catalog/--no-reuse-catalog", help="Reuse saved areas, routes, and route stats from sibling exports in the catalog root when available."),
+    progress: bool = typer.Option(True, "--progress/--no-progress", help="Show Rich progress bars and an elapsed timer while scraping."),
+    materialize_structured_storage: bool = typer.Option(True, "--materialize-structured-storage/--no-materialize-structured-storage", help="Build local Parquet tables and a DuckDB database from the exported JSONL tables."),
+    resolve_photo_pages: bool = typer.Option(False, "--resolve-photo-pages/--no-resolve-photo-pages", help="Fetch each photo page to resolve direct image URLs."),
+    download_images: bool = typer.Option(False, "--download-images/--no-download-images", help="Download resolved image files into the output directory."),
+    save_html: bool = typer.Option(False, "--save-html/--no-save-html", help="Persist raw HTML snapshots for debugging and re-parsing."),
+    auth_credentials_file: Path | None = typer.Option(None, "--auth-credentials-file", help="Path to a JSON file with Mountain Project login credentials: {'email': '...', 'password': '...'} . Defaults to ./mountainproject-auth.json when present."),
+    login_email: str | None = typer.Option(None, "--login-email", envvar="MOUNTAINPROJECT_EMAIL", help="Mountain Project login email. Prefer the MOUNTAINPROJECT_EMAIL env var."),
+    login_password: str | None = typer.Option(None, "--login-password", envvar="MOUNTAINPROJECT_PASSWORD", help="Mountain Project login password. Prefer the MOUNTAINPROJECT_PASSWORD env var or --auth-credentials-file."),
+    cookie: list[str] | None = typer.Option(None, "--cookie", help="Repeatable session cookie in name=value form."),
+    user_agent: str = typer.Option("Mozilla/5.0", help="User-Agent header to send with requests."),
+) -> None:
+    continent_row = _resolve_continent_row(
+        continent,
+        catalog_root=catalog_root,
+        http_cache_mode=http_cache_mode,
+        user_agent=user_agent,
+    )
+    if skip_if_pulled and continent_row["completed_full_depth"]:
+        typer.echo(f"Skipping {continent_row['continent']}: already pulled in {continent_row['export_name']}")
+        return
+    if dry_run:
+        typer.echo(f"Would pull {continent_row['continent']}: {continent_row['area_url']}")
+        return
+    scrape_area(
+        start_url=str(continent_row["area_url"]),
         output_dir=None,
         catalog_root=catalog_root,
         max_depth=max_depth,
@@ -433,6 +559,130 @@ def pull_unpulled_states(
         )
 
 
+@app.command("pull-international")
+def pull_international(
+    catalog_root: Path = typer.Option(Path("data/exports"), help="Top-level directory that holds all reusable export directories."),
+    skip_if_pulled: bool = typer.Option(True, "--skip-if-pulled/--no-skip-if-pulled", help="Skip continents that already have a completed full-depth crawl manifest."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show which continents would be pulled and exit without scraping."),
+    max_depth: int = typer.Option(0, min=0, help="How many child-area levels to recurse into when --no-full-depth is used."),
+    full_depth: bool = typer.Option(True, "--full-depth/--no-full-depth", help="Recurse through all in-scope descendant areas until no child areas remain."),
+    delay_seconds: float = typer.Option(0.1, min=0.0, help="Global minimum delay between uncached requests across all worker threads."),
+    http_cache_mode: Literal["persistent", "ephemeral", "disabled"] = typer.Option("ephemeral", "--http-cache-mode", help="How to cache full HTTP response bodies during a scrape."),
+    fetch_comments: bool = typer.Option(True, "--fetch-comments/--no-fetch-comments", help="Fetch route and area comments via the comments fragment endpoint."),
+    fetch_route_stats: bool = typer.Option(True, "--fetch-route-stats/--no-fetch-route-stats", help="Fetch route stars, suggested ratings, to-do users, and ticks via the route stats API."),
+    hydrate_missing_route_stats_only: bool = typer.Option(False, "--hydrate-missing-route-stats-only", help="Fetch route stats only for routes already present in routes.jsonl that do not yet have route stats exported."),
+    route_workers: int = typer.Option(8, min=1, help="Worker threads to use when scraping route pages within an area."),
+    route_stats_workers: int = typer.Option(8, min=1, help="Worker threads to use when fetching route stats endpoints."),
+    resume_output: bool = typer.Option(True, "--resume-output/--fresh-output", help="Preserve existing JSONL exports and append only missing records instead of truncating the output directory."),
+    reuse_catalog: bool = typer.Option(True, "--reuse-catalog/--no-reuse-catalog", help="Reuse saved areas, routes, and route stats from sibling exports in the catalog root when available."),
+    progress: bool = typer.Option(True, "--progress/--no-progress", help="Show Rich progress bars and an elapsed timer while scraping."),
+    materialize_structured_storage: bool = typer.Option(True, "--materialize-structured-storage/--no-materialize-structured-storage", help="Build local Parquet tables and a DuckDB database from the exported JSONL tables."),
+    resolve_photo_pages: bool = typer.Option(False, "--resolve-photo-pages/--no-resolve-photo-pages", help="Fetch each photo page to resolve direct image URLs."),
+    download_images: bool = typer.Option(False, "--download-images/--no-download-images", help="Download resolved image files into the output directory."),
+    save_html: bool = typer.Option(False, "--save-html/--no-save-html", help="Persist raw HTML snapshots for debugging and re-parsing."),
+    auth_credentials_file: Path | None = typer.Option(None, "--auth-credentials-file", help="Path to a JSON file with Mountain Project login credentials: {'email': '...', 'password': '...'} . Defaults to ./mountainproject-auth.json when present."),
+    login_email: str | None = typer.Option(None, "--login-email", envvar="MOUNTAINPROJECT_EMAIL", help="Mountain Project login email. Prefer the MOUNTAINPROJECT_EMAIL env var."),
+    login_password: str | None = typer.Option(None, "--login-password", envvar="MOUNTAINPROJECT_PASSWORD", help="Mountain Project login password. Prefer the MOUNTAINPROJECT_PASSWORD env var or --auth-credentials-file."),
+    cookie: list[str] | None = typer.Option(None, "--cookie", help="Repeatable session cookie in name=value form."),
+    user_agent: str = typer.Option("Mozilla/5.0", help="User-Agent header to send with requests."),
+) -> None:
+    rows = _load_continent_rows(
+        catalog_root=catalog_root,
+        http_cache_mode=http_cache_mode,
+        user_agent=user_agent,
+    )
+    target_rows = [row for row in rows if not row["completed_full_depth"]] if skip_if_pulled else rows
+    if dry_run:
+        typer.echo(f"Would pull {len(target_rows)} continents from International.")
+        for index, row in enumerate(target_rows, start=1):
+            typer.echo(f"[{index}/{len(target_rows)}] {row['continent']}: {row['area_url']}")
+        return
+
+    typer.echo(f"Pulling {len(target_rows)} continents from International.")
+    for index, row in enumerate(target_rows, start=1):
+        typer.echo(f"[{index}/{len(target_rows)}] Pulling {row['continent']}: {row['area_url']}")
+        scrape_area(
+            start_url=str(row["area_url"]),
+            output_dir=None,
+            catalog_root=catalog_root,
+            max_depth=max_depth,
+            full_depth=full_depth,
+            delay_seconds=delay_seconds,
+            http_cache_mode=http_cache_mode,
+            fetch_comments=fetch_comments,
+            fetch_route_stats=fetch_route_stats,
+            hydrate_missing_route_stats_only=hydrate_missing_route_stats_only,
+            route_workers=route_workers,
+            route_stats_workers=route_stats_workers,
+            resume_output=resume_output,
+            reuse_catalog=reuse_catalog,
+            progress=progress,
+            materialize_structured_storage=materialize_structured_storage,
+            resolve_photo_pages=resolve_photo_pages,
+            download_images=download_images,
+            save_html=save_html,
+            auth_credentials_file=auth_credentials_file,
+            login_email=login_email,
+            login_password=login_password,
+            cookie=cookie,
+            user_agent=user_agent,
+        )
+
+
+@app.command("pull-unpulled-continents")
+def pull_unpulled_continents(
+    catalog_root: Path = typer.Option(Path("data/exports"), help="Top-level directory that holds all reusable export directories."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show which continents would be pulled and exit without scraping."),
+    max_depth: int = typer.Option(0, min=0, help="How many child-area levels to recurse into when --no-full-depth is used."),
+    full_depth: bool = typer.Option(True, "--full-depth/--no-full-depth", help="Recurse through all in-scope descendant areas until no child areas remain."),
+    delay_seconds: float = typer.Option(0.1, min=0.0, help="Global minimum delay between uncached requests across all worker threads."),
+    http_cache_mode: Literal["persistent", "ephemeral", "disabled"] = typer.Option("ephemeral", "--http-cache-mode", help="How to cache full HTTP response bodies during a scrape."),
+    fetch_comments: bool = typer.Option(True, "--fetch-comments/--no-fetch-comments", help="Fetch route and area comments via the comments fragment endpoint."),
+    fetch_route_stats: bool = typer.Option(True, "--fetch-route-stats/--no-fetch-route-stats", help="Fetch route stars, suggested ratings, to-do users, and ticks via the route stats API."),
+    hydrate_missing_route_stats_only: bool = typer.Option(False, "--hydrate-missing-route-stats-only", help="Fetch route stats only for routes already present in routes.jsonl that do not yet have route stats exported."),
+    route_workers: int = typer.Option(8, min=1, help="Worker threads to use when scraping route pages within an area."),
+    route_stats_workers: int = typer.Option(8, min=1, help="Worker threads to use when fetching route stats endpoints."),
+    resume_output: bool = typer.Option(True, "--resume-output/--fresh-output", help="Preserve existing JSONL exports and append only missing records instead of truncating the output directory."),
+    reuse_catalog: bool = typer.Option(True, "--reuse-catalog/--no-reuse-catalog", help="Reuse saved areas, routes, and route stats from sibling exports in the catalog root when available."),
+    progress: bool = typer.Option(True, "--progress/--no-progress", help="Show Rich progress bars and an elapsed timer while scraping."),
+    materialize_structured_storage: bool = typer.Option(True, "--materialize-structured-storage/--no-materialize-structured-storage", help="Build local Parquet tables and a DuckDB database from the exported JSONL tables."),
+    resolve_photo_pages: bool = typer.Option(False, "--resolve-photo-pages/--no-resolve-photo-pages", help="Fetch each photo page to resolve direct image URLs."),
+    download_images: bool = typer.Option(False, "--download-images/--no-download-images", help="Download resolved image files into the output directory."),
+    save_html: bool = typer.Option(False, "--save-html/--no-save-html", help="Persist raw HTML snapshots for debugging and re-parsing."),
+    auth_credentials_file: Path | None = typer.Option(None, "--auth-credentials-file", help="Path to a JSON file with Mountain Project login credentials: {'email': '...', 'password': '...'} . Defaults to ./mountainproject-auth.json when present."),
+    login_email: str | None = typer.Option(None, "--login-email", envvar="MOUNTAINPROJECT_EMAIL", help="Mountain Project login email. Prefer the MOUNTAINPROJECT_EMAIL env var."),
+    login_password: str | None = typer.Option(None, "--login-password", envvar="MOUNTAINPROJECT_PASSWORD", help="Mountain Project login password. Prefer the MOUNTAINPROJECT_PASSWORD env var or --auth-credentials-file."),
+    cookie: list[str] | None = typer.Option(None, "--cookie", help="Repeatable session cookie in name=value form."),
+    user_agent: str = typer.Option("Mozilla/5.0", help="User-Agent header to send with requests."),
+) -> None:
+    pull_international(
+        catalog_root=catalog_root,
+        skip_if_pulled=True,
+        dry_run=dry_run,
+        max_depth=max_depth,
+        full_depth=full_depth,
+        delay_seconds=delay_seconds,
+        http_cache_mode=http_cache_mode,
+        fetch_comments=fetch_comments,
+        fetch_route_stats=fetch_route_stats,
+        hydrate_missing_route_stats_only=hydrate_missing_route_stats_only,
+        route_workers=route_workers,
+        route_stats_workers=route_stats_workers,
+        resume_output=resume_output,
+        reuse_catalog=reuse_catalog,
+        progress=progress,
+        materialize_structured_storage=materialize_structured_storage,
+        resolve_photo_pages=resolve_photo_pages,
+        download_images=download_images,
+        save_html=save_html,
+        auth_credentials_file=auth_credentials_file,
+        login_email=login_email,
+        login_password=login_password,
+        cookie=cookie,
+        user_agent=user_agent,
+    )
+
+
 def main() -> None:
     argv = sys.argv[1:]
     if argv and argv[0] not in CLI_COMMAND_NAMES and not argv[0].startswith("-"):
@@ -464,13 +714,46 @@ def _load_state_rows(
     route_guide = client.fetch_text(ROUTE_GUIDE_URL)
     state_area_urls = parse_route_guide_state_area_urls(route_guide.text, page_url=ROUTE_GUIDE_URL)
 
+    return _build_named_area_rows("state", state_area_urls, catalog_root=catalog_root)
+
+
+def _load_continent_rows(
+    *,
+    catalog_root: Path,
+    http_cache_mode: Literal["persistent", "ephemeral", "disabled"],
+    user_agent: str,
+) -> list[dict[str, object]]:
+    catalog_root.mkdir(parents=True, exist_ok=True)
+    client = MountainProjectClient(
+        delay_seconds=0.0,
+        cache_dir=catalog_root / ".cache" / "http",
+        user_agent=user_agent,
+        cache_mode=http_cache_mode,
+    )
+    international_area_url = _resolve_international_area_url(client)
+    international_page = client.fetch_text(international_area_url)
+    continent_area_urls = parse_international_continent_area_urls(
+        international_page.text,
+        page_url=international_area_url,
+    )
+
+    return _build_named_area_rows("continent", continent_area_urls, catalog_root=catalog_root)
+
+
+def _build_named_area_rows(
+    name_key: str,
+    named_area_urls: list[tuple[str, str]],
+    *,
+    catalog_root: Path,
+) -> list[dict[str, object]]:
+
     catalog = ExportCatalog(root=catalog_root)
     rows: list[dict[str, object]] = []
-    for state_name, area_url in state_area_urls:
+    for area_name, area_url in named_area_urls:
         completed = catalog.find_completed_crawl(area_url, require_full_depth=True)
         rows.append(
             {
-                "state": state_name,
+                name_key: area_name,
                 "area_url": area_url,
                 "completed_full_depth": completed is not None,
                 "export_name": completed.export_name if completed is not None else None,
@@ -494,7 +777,21 @@ def _emit_state_rows(rows: list[dict[str, object]], *, output_format: Literal["t
     typer.echo(f"Total states listed: {len(rows)}")
 
 
-def _normalize_state_name(value: str) -> str:
+def _emit_continent_rows(rows: list[dict[str, object]], *, output_format: Literal["text", "json"]) -> None:
+    if output_format == "json":
+        typer.echo(json.dumps(rows, indent=2))
+        return
+
+    for row in rows:
+        status = "done" if row["completed_full_depth"] else "missing"
+        suffix = f" [{status}]"
+        if row["export_name"]:
+            suffix += f" {row['export_name']}"
+        typer.echo(f"{row['continent']}: {row['area_url']}{suffix}")
+    typer.echo(f"Total continents listed: {len(rows)}")
+
+
+def _normalize_lookup_name(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
 
 
@@ -505,17 +802,48 @@ def _resolve_state_row(
     http_cache_mode: Literal["persistent", "ephemeral", "disabled"],
     user_agent: str,
 ) -> dict[str, object]:
-    state_key = _normalize_state_name(state)
+    state_key = _normalize_lookup_name(state)
     rows = _load_state_rows(
         catalog_root=catalog_root,
         http_cache_mode=http_cache_mode,
         user_agent=user_agent,
     )
     for row in rows:
-        if _normalize_state_name(str(row["state"])) == state_key:
+        if _normalize_lookup_name(str(row["state"])) == state_key:
             return row
     available = ", ".join(str(row["state"]) for row in rows)
     raise typer.BadParameter(f"Unknown state '{state}'. Available states: {available}")
+
+
+def _resolve_continent_row(
+    continent: str,
+    *,
+    catalog_root: Path,
+    http_cache_mode: Literal["persistent", "ephemeral", "disabled"],
+    user_agent: str,
+) -> dict[str, object]:
+    continent_key = _normalize_lookup_name(continent)
+    rows = _load_continent_rows(
+        catalog_root=catalog_root,
+        http_cache_mode=http_cache_mode,
+        user_agent=user_agent,
+    )
+    for row in rows:
+        if _normalize_lookup_name(str(row["continent"])) == continent_key:
+            return row
+    available = ", ".join(str(row["continent"]) for row in rows)
+    raise typer.BadParameter(f"Unknown continent '{continent}'. Available continents: {available}")
+
+
+def _resolve_international_area_url(client: MountainProjectClient) -> str:
+    route_guide = client.fetch_text(ROUTE_GUIDE_URL)
+    international_area_url = parse_route_guide_international_area_url(
+        route_guide.text,
+        page_url=ROUTE_GUIDE_URL,
+    )
+    if international_area_url is None:
+        raise RuntimeError("Could not locate the International area URL on the route-guide page.")
+    return international_area_url
 
 
 def _resolve_auth_credentials_file(
