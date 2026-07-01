@@ -194,8 +194,8 @@ When `--reuse-catalog` is on, the scraper will reuse matching areas, routes, and
 Use the loader and query helpers when you want to work with previously scraped exports in notebooks, analysis code, or an application layer:
 
 ```python
-from mountainproject.loaders import load_exports
-from mountainproject.queries import dataset_counts, route_comment_counts
+from mountainproject.reader.loaders import load_exports
+from mountainproject.reader.queries import dataset_counts, route_comment_counts
 
 loaded = load_exports(prefer_names=["holcomb_valley_pinnacles"])
 try:
