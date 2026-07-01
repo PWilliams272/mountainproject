@@ -7,7 +7,7 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from bs4 import BeautifulSoup, NavigableString, Tag
 
-from ..models import AreaRecord, CommentRecord, PhotoRecord, RouteRecord
+from ..domain.models import AreaRecord, CommentRecord, PhotoRecord, RouteRecord
 
 HEADING_NAMES = {"h1", "h2", "h3"}
 MOUNTAINPROJECT_HOSTS = {"mountainproject.com", "www.mountainproject.com"}

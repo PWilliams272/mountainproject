@@ -4,7 +4,7 @@ import html
 import re
 from typing import Any
 
-from ..models import (
+from ..domain.models import (
     RouteRecord,
     RouteStarRecord,
     RouteStatsBundle,

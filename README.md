@@ -1,4 +1,4 @@
-# mountainproject-scraper
+# mountainproject
 
 Python package for scraping Mountain Project area trees into structured files.
 
@@ -36,36 +36,36 @@ By default, exports now live under `data/exports/<area_slug>`, and sibling expor
 
 The codebase now has a split between scraping, storage, and domain models:
 
-- `mountainproject_scraper.scrape`: scraping CLI and crawl/fetch logic
-- `mountainproject_scraper.storage`: export catalog, structured storage, and data access helpers
-- `mountainproject_scraper.domain`: shared record models
+- `mountainproject.scraper`: scraping CLI and crawl/fetch logic
+- `mountainproject.storage`: export catalog, structured storage, and data access helpers
+- `mountainproject.domain`: shared record models
 
-Scraper code is now canonical under `mountainproject_scraper.scrape`. The old top-level scraper modules have been removed, so programmatic scraper imports should use `mountainproject_scraper.scrape.*` paths.
+Scraper code is now canonical under `mountainproject.scraper`. Shared record models are canonical under `mountainproject.domain.models`.
 
 ## Usage
 
 List state roots that have already been pulled:
 
 ```bash
-mountainproject-scraper list-pulled-states
+mountainproject list-pulled-states
 ```
 
 List state roots that have not been pulled yet:
 
 ```bash
-mountainproject-scraper list-unpulled-states
+mountainproject list-unpulled-states
 ```
 
 Preview the remaining state queue without scraping:
 
 ```bash
-mountainproject-scraper pull-unpulled-states --dry-run
+mountainproject pull-unpulled-states --dry-run
 ```
 
 Pull a state by name instead of passing the full Mountain Project area URL:
 
 ```bash
-mountainproject-scraper pull-state colorado
+mountainproject pull-state colorado
 ```
 
 By default, `pull-state` skips states that already have a completed full-depth manifest. Use `--no-skip-if-pulled` if you want to force a rerun.
@@ -75,7 +75,7 @@ By default, `scrape-area` and the state-based commands now use full-depth crawli
 Scrape a single area page and all routes directly listed on it:
 
 ```bash
-mountainproject-scraper scrape-area \
+mountainproject scrape-area \
   "https://www.mountainproject.com/area/116147434/main-wall" \
   --output-dir data/exports/main_wall \
   --max-depth 0 \
@@ -89,7 +89,7 @@ mountainproject-scraper scrape-area \
 Include route-level stars, suggested ratings, to-do users, and ticks:
 
 ```bash
-mountainproject-scraper scrape-area \
+mountainproject scrape-area \
   "https://www.mountainproject.com/area/116147434/main-wall" \
   --output-dir data/exports/main_wall \
   --max-depth 0 \
@@ -103,7 +103,7 @@ mountainproject-scraper scrape-area \
 Hydrate only the missing route stats for an existing export without re-scraping route pages:
 
 ```bash
-mountainproject-scraper scrape-area \
+mountainproject scrape-area \
   "https://www.mountainproject.com/area/105931166/central-pinnacles" \
   --output-dir data/exports/central_pinnacles \
   --fetch-route-stats \
@@ -116,7 +116,7 @@ mountainproject-scraper scrape-area \
 Recurse into child areas:
 
 ```bash
-mountainproject-scraper scrape-area \
+mountainproject scrape-area \
   "https://www.mountainproject.com/area/105708963/south-dakota" \
   --output-dir data/exports/south_dakota \
   --max-depth 2 \
@@ -126,7 +126,7 @@ mountainproject-scraper scrape-area \
 Or crawl the full in-scope subtree until no more descendant areas remain:
 
 ```bash
-mountainproject-scraper scrape-area \
+mountainproject scrape-area \
   "https://www.mountainproject.com/area/105805238/holcomb-valley-pinnacles" \
   --output-dir data/exports/holcomb_valley_pinnacles \
   --full-depth \
@@ -136,7 +136,7 @@ mountainproject-scraper scrape-area \
 Pass authenticated session cookies when you need deeper comment access:
 
 ```bash
-mountainproject-scraper scrape-area \
+mountainproject scrape-area \
   "https://www.mountainproject.com/area/116147434/main-wall" \
   --output-dir data/exports/main_wall \
   --cookie session_name=session_value \
@@ -149,7 +149,7 @@ Log in with Mountain Project credentials when you want the scraper to request co
 export MOUNTAINPROJECT_EMAIL="you@example.com"
 export MOUNTAINPROJECT_PASSWORD="your-password"
 
-mountainproject-scraper scrape-area \
+mountainproject scrape-area \
   "https://www.mountainproject.com/area/116147434/main-wall" \
   --output-dir data/exports/main_wall \
   --fetch-comments \
@@ -166,7 +166,7 @@ Or point the scraper at a local JSON credentials file:
 ```
 
 ```bash
-mountainproject-scraper scrape-area \
+mountainproject scrape-area \
   "https://www.mountainproject.com/area/116147434/main-wall" \
   --output-dir data/exports/main_wall \
   --fetch-comments \
@@ -178,7 +178,7 @@ If `./mountainproject-auth.json` exists in the project root, the scraper now use
 Download resolved image files:
 
 ```bash
-mountainproject-scraper scrape-area \
+mountainproject scrape-area \
   "https://www.mountainproject.com/area/116147434/main-wall" \
   --output-dir data/exports/main-wall \
   --resolve-photo-pages \
@@ -194,8 +194,8 @@ When `--reuse-catalog` is on, the scraper will reuse matching areas, routes, and
 Use the loader and query helpers when you want to work with previously scraped exports in notebooks, analysis code, or an application layer:
 
 ```python
-from mountainproject_scraper.loaders import load_exports
-from mountainproject_scraper.queries import dataset_counts, route_comment_counts
+from mountainproject.loaders import load_exports
+from mountainproject.queries import dataset_counts, route_comment_counts
 
 loaded = load_exports(prefer_names=["holcomb_valley_pinnacles"])
 try:

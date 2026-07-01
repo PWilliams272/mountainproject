@@ -7,7 +7,7 @@ from typing import Any
 
 from .client import MountainProjectClient
 from .route_stats import parse_route_stats_bundle
-from ..models import RouteRecord
+from ..domain.models import RouteRecord
 
 
 class RouteStatsFetcher:

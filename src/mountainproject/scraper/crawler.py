@@ -23,7 +23,7 @@ from .extract import (
 )
 from .progress import NullProgressReporter
 from .route_stats_fetcher import RouteStatsFetcher
-from ..models import AreaRecord, PhotoRecord, RouteRecord
+from ..domain.models import AreaRecord, PhotoRecord, RouteRecord
 from ..storage.exporters import JsonExporter
 
 

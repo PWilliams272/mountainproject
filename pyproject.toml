@@ -3,7 +3,7 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mountainproject-scraper"
+name = "mountainproject"
 version = "0.1.0"
 description = "Scrape Mountain Project areas, routes, comments, and photos into structured files"
 readme = "README.md"
@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.scripts]
-mountainproject-scraper = "mountainproject_scraper.scrape.cli:app"
+mountainproject = "mountainproject.scraper.cli:app"
 
 [project.optional-dependencies]
 dev = [

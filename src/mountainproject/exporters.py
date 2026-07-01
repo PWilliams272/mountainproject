@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .catalog import ExportCatalog
-from .models import (
+from .domain.models import (
     AreaRecord,
     CommentRecord,
     PhotoRecord,

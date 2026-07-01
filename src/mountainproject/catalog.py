@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
-from .models import RouteStatsBundle, area_from_dict, route_from_dict
+from .domain.models import RouteStatsBundle, area_from_dict, route_from_dict
 
 
 @dataclass(frozen=True)
@@ -176,7 +176,7 @@ class ExportCatalog:
 
 
 def route_stats_bundle_from_dict(payload: dict[str, object]) -> RouteStatsBundle:
-    from .models import (
+    from .domain.models import (
         RouteStarRecord,
         RouteStatsSummary,
         RouteSuggestedRatingRecord,

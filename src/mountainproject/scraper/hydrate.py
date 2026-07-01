@@ -11,7 +11,7 @@ from requests import HTTPError, RequestException
 from .client import MountainProjectClient
 from .progress import NullProgressReporter
 from .route_stats_fetcher import RouteStatsFetcher
-from ..models import RouteRecord
+from ..domain.models import RouteRecord
 from ..storage.exporters import JsonExporter
 
 
